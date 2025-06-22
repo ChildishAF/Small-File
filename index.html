@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom File Compressor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+  <style>
+    /* Global styles and black & white theme */
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f0f0f0; /* Light gray background */
+      padding: 1em;
+      color: #333; /* Dark gray text */
+      display: flex;
+      justify-content: center;
+      align-items: flex-start; /* Align to start to prevent full-height centering issues on short content */
+      min-height: 100vh; /* Minimum height for body */
+      box-sizing: border-box; /* Include padding in element's total width and height */
+    }
+
+    .container {
+      background: #ffffff; /* White container background */
+      padding: 1.5em; /* Responsive padding */
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Subtle shadow */
+      max-width: 600px;
+      width: 95%; /* Fluid width for responsiveness */
+      margin: 1em auto; /* Center with some margin */
+      box-sizing: border-box;
+    }
+
+    h1 {
+      text-align: center;
+      color: #222; /* Darker heading */
+      font-size: 1.8em; /* Responsive font size */
+      margin-bottom: 1em;
+    }
+
+    h2 {
+      margin-top: 1.5em; /* Adjusted margin */
+      font-size: 1.1em; /* Responsive font size */
+      color: #444;
+      border-bottom: 1px solid #eee; /* Light separator */
+      padding-bottom: 0.5em;
+      margin-bottom: 1em;
+    }
+
+    input[type="file"] {
+      width: 100%; /* Full width */
+      margin: 0.8em 0;
+      padding: 0.5em;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box; /* Include padding and border in width */
+    }
+
+    button {
+      background: #333; /* Dark button background */
+      color: white;
+      border: none;
+      padding: 0.8em 1.5em; /* Larger padding for touch targets */
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1em;
+      margin-top: 0.8em; /* Adjusted margin */
+      transition: background 0.3s ease; /* Smooth transition */
+      width: 100%; /* Full width button */
+      box-sizing: border-box;
+    }
+
+    button:hover {
+      background: #555; /* Lighter on hover */
+    }
+
+    #status {
+      background: #f9f9f9; /* Very light background for status */
+      border: 1px solid #ddd; /* Light border */
+      border-radius: 8px;
+      padding: 1em;
+      margin-top: 2em;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 0.9em;
+      max-height: 150px; /* Limit height */
+      overflow-y: auto; /* Scroll if content overflows */
+    }
+
+    #dropZone {
+      border: 2px dashed #aaa; /* Gray dashed border */
+      padding: 2em; /* Larger padding for drag area */
+      text-align: center;
+      margin-bottom: 1.5em;
+      background: #f5f5f5; /* Light gray background */
+      border-radius: 8px;
+      transition: background 0.3s ease, border-color 0.3s ease;
+      cursor: pointer; /* Indicate interactivity */
+    }
+
+    #dropZone.drag-over {
+      background: #e0e0e0; /* Darker gray when dragging over */
+      border-color: #555;
+    }
+
+    /* Message Box Styles */
+    .message-box-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5); /* Semi-transparent black overlay */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .message-box {
+      background: #ffffff;
+      padding: 2em;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      max-width: 400px;
+      width: 90%; /* Responsive width */
+      text-align: center;
+      position: relative; /* For close button positioning */
+    }
+
+    .message-box h3 {
+      margin-top: 0;
+      color: #222;
+      font-size: 1.3em;
+    }
+
+    .message-box p {
+      margin-bottom: 1.5em;
+      color: #555;
+    }
+
+    .message-box button {
+      background: #333;
+      color: white;
+      border: none;
+      padding: 0.7em 1.5em;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1em;
+      width: auto; /* Auto width for buttons inside message box */
+      margin: 0 0.5em;
+    }
+
+    .message-box button:hover {
+      background: #555;
+    }
+
+    /* Media Queries for Mobile Responsiveness */
+    @media (max-width: 768px) {
+      body {
+        padding: 0.5em; /* Less padding on very small screens */
+      }
+
+      .container {
+        padding: 1em;
+        border-radius: 8px; /* Slightly less rounded corners on smaller screens */
+      }
+
+      h1 {
+        font-size: 1.5em;
+      }
+
+      h2 {
+        font-size: 1em;
+      }
+
+      button {
+        padding: 0.7em 1em; /* Slightly smaller buttons */
+        font-size: 0.95em;
+      }
+
+      #dropZone {
+        padding: 1.5em;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        margin: 0.5em auto; /* Closer to edges on very small screens */
+      }
+      h1 {
+        font-size: 1.3em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Small File</h1>
+
+    <h2>Compress a File</h2>
+    <input type="file" id="fileInput" multiple>
+    <button onclick="compressFilesWrapper()">Compress</button>
+
+    <h2>Decompress a .huff File</h2>
+    <input type="file" id="decompressInput" accept=".huff">
+    <button onclick="decompressFileWrapper()">Decompress</button>
+
+    <h2>Drag & Drop Area</h2>
+    <div id="dropZone">Drop file(s) here to compress or decompress</div>
+
+    <button onclick="resetUI()">Reset</button>
+
+    <div id="status">Status:\n</div>
+  </div>
+
+  <!-- Message Box HTML -->
+  <div id="messageBoxOverlay" class="message-box-overlay" style="display: none;">
+    <div class="message-box">
+      <h3 id="messageBoxTitle"></h3>
+      <p id="messageBoxContent"></p>
+      <button id="messageBoxOkBtn">OK</button>
+    </div>
+  </div>
+
+  <script src="compressor.js"></script>
+  <script src="decompressor.js"></script>
+  <script>
+    // Utility function to show custom message box instead of alert()
+    function showMessageBox(title, message) {
+      const overlay = document.getElementById('messageBoxOverlay');
+      const titleElement = document.getElementById('messageBoxTitle');
+      const contentElement = document.getElementById('messageBoxContent');
+      const okButton = document.getElementById('messageBoxOkBtn');
+
+      titleElement.innerText = title;
+      contentElement.innerText = message;
+      overlay.style.display = 'flex'; // Show the overlay
+
+      okButton.onclick = () => {
+        overlay.style.display = 'none'; // Hide when OK is clicked
+      };
+    }
+
+    const dropZone = document.getElementById('dropZone');
+    const status = document.getElementById('status');
+
+    // Function wrappers to replace alert() with showMessageBox()
+    function compressFilesWrapper() {
+      const input = document.getElementById('fileInput');
+      if (input.files.length === 0) {
+        showMessageBox("No Files Selected", "Please select at least one file to compress.");
+        return;
+      }
+      compressFiles(); // Call original function
+    }
+
+    function decompressFileWrapper() {
+      const input = document.getElementById('decompressInput');
+      if (!input.files.length) {
+        showMessageBox("No File Selected", "Please select a .huff file to decompress.");
+        return;
+      }
+      // Assuming handleDecompression is globally available from decompressor.js
+      handleDecompression(input.files[0]);
+    }
+
+    // Drag and Drop Event Listeners
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over'); // Add class for visual feedback
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over'); // Remove class
+    });
+
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over'); // Remove class
+      const files = Array.from(e.dataTransfer.files);
+      status.innerText = 'Status:\n'; // Clear status for new drag/drop operation
+
+      if (files.length === 0) {
+        showMessageBox("No Files Dropped", "Please drag and drop at least one file.");
+        return;
+      }
+
+      files.forEach(file => {
+        if (file.name.endsWith('.huff')) {
+          // Decompress .huff files
+          if (typeof handleDecompression === 'function') {
+            handleDecompression(file);
+          } else {
+            console.error("handleDecompression function not found.");
+            status.innerText += `❌ Error: Decompression function not loaded for "${file.name}"\n`;
+          }
+        } else {
+          // Compress other files
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const originalData = new Uint8Array(e.target.result);
+            if (typeof compressHuffman === 'function') {
+              const compressedBlob = compressHuffman(originalData, file.name);
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(compressedBlob);
+              a.download = file.name + '.huff';
+              a.click();
+              status.innerText += `✅ Compressed "${file.name}" to .huff\n`;
+            } else {
+              console.error("compressHuffman function not found.");
+              status.innerText += `❌ Error: Compression function not loaded for "${file.name}"\n`;
+            }
+          };
+          reader.onerror = () => {
+            status.innerText += `❌ Error reading file: "${file.name}"\n`;
+            showMessageBox("File Read Error", `Could not read file: "${file.name}".`);
+          };
+          reader.readAsArrayBuffer(file);
+        }
+      });
+    });
+
+    function resetUI() {
+      document.getElementById('fileInput').value = '';
+      document.getElementById('decompressInput').value = '';
+      status.innerText = 'Status:\n';
+      dropZone.classList.remove('drag-over'); // Ensure drag-over class is removed
+    }
+
+    // Override the alert function in compressor.js and decompressor.js if they use plain alert
+    // It's better to modify the original JS files if possible, but this is a fallback.
+    // However, it's safer to just modify the functions that call alert.
+    // The current approach (wrapping in `compressFilesWrapper`, `decompressFileWrapper`) is better.
+    // Let's ensure the original JS files themselves don't directly call `alert()`.
+    // I'll assume they were modified or the wrappers handle it.
+  </script>
+</body>
+</html>
