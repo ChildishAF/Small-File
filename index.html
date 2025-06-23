@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Custom File Compressor</title>
+  <title>Small File</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
   <style>
     /* Global styles and black & white theme */
@@ -82,7 +82,7 @@
       white-space: pre-wrap;
       font-family: monospace;
       font-size: 0.9em;
-      max-height: 150px; /* Limit height */
+      max-height: 200px; /* Limit height */
       overflow-y: auto; /* Scroll if content overflows */
     }
 
@@ -154,6 +154,23 @@
       background: #555;
     }
 
+    /* Loader Styles */
+    .loader {
+      border: 4px solid #f3f3f3; /* Light grey */
+      border-top: 4px solid #333; /* Dark grey */
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: none; /* Hidden by default */
+      margin: 1em auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     /* Media Queries for Mobile Responsiveness */
     @media (max-width: 768px) {
       body {
@@ -210,6 +227,7 @@
 
     <button onclick="resetUI()">Reset</button>
 
+    <div id="loader" class="loader"></div> <!-- Loader element -->
     <div id="status">Status:\n</div>
   </div>
 
@@ -243,15 +261,17 @@
 
     const dropZone = document.getElementById('dropZone');
     const status = document.getElementById('status');
+    const loader = document.getElementById('loader');
 
-    // Function wrappers to replace alert() with showMessageBox()
+    // Function wrappers to manage loader and calls to core functions
     function compressFilesWrapper() {
       const input = document.getElementById('fileInput');
       if (input.files.length === 0) {
         showMessageBox("No Files Selected", "Please select at least one file to compress.");
         return;
       }
-      compressFiles(); // Call original function
+      // Call the global compressFiles function from compressor.js
+      compressFiles();
     }
 
     function decompressFileWrapper() {
@@ -260,7 +280,7 @@
         showMessageBox("No File Selected", "Please select a .huff file to decompress.");
         return;
       }
-      // Assuming handleDecompression is globally available from decompressor.js
+      // Call the global handleDecompression function from decompressor.js
       handleDecompression(input.files[0]);
     }
 
@@ -274,65 +294,90 @@
       dropZone.classList.remove('drag-over'); // Remove class
     });
 
-    dropZone.addEventListener('drop', e => {
+    dropZone.addEventListener('drop', async e => {
       e.preventDefault();
       dropZone.classList.remove('drag-over'); // Remove class
       const files = Array.from(e.dataTransfer.files);
       status.innerText = 'Status:\n'; // Clear status for new drag/drop operation
+      loader.style.display = 'block'; // Show loader
 
       if (files.length === 0) {
         showMessageBox("No Files Dropped", "Please drag and drop at least one file.");
+        loader.style.display = 'none';
         return;
       }
 
-      files.forEach(file => {
-        if (file.name.endsWith('.huff')) {
-          // Decompress .huff files
-          if (typeof handleDecompression === 'function') {
-            handleDecompression(file);
+      let filesProcessedCount = 0;
+      const totalFilesToProcess = files.length;
+
+      for (const file of files) {
+        try {
+          if (file.name.endsWith('.huff')) {
+            // Decompress .huff files
+            if (typeof handleDecompression === 'function') {
+              // Read file as ArrayBuffer for decompression
+              const fileData = await readFileAsArrayBuffer(file);
+              // Temporarily create a Blob for handleDecompression's expectation
+              // (handleDecompression reads from a File object, so we simulate it)
+              const tempFile = new File([fileData], file.name, { type: file.type });
+              await handleDecompression(tempFile); // Call decompression logic
+            } else {
+              throw new Error("Decompression function (handleDecompression) not found.");
+            }
           } else {
-            console.error("handleDecompression function not found.");
-            status.innerText += `❌ Error: Decompression function not loaded for "${file.name}"\n`;
-          }
-        } else {
-          // Compress other files
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            const originalData = new Uint8Array(e.target.result);
+            // Compress other files
             if (typeof compressHuffman === 'function') {
+              const originalData = new Uint8Array(await readFileAsArrayBuffer(file));
+              const originalSize = originalData.length;
+
               const compressedBlob = compressHuffman(originalData, file.name);
+              const compressedSize = compressedBlob.size;
+
               const a = document.createElement('a');
               a.href = URL.createObjectURL(compressedBlob);
               a.download = file.name + '.huff';
               a.click();
-              status.innerText += `✅ Compressed "${file.name}" to .huff\n`;
+              URL.revokeObjectURL(a.href); // Clean up the URL object
+
+              const compressionRatio = (1 - (compressedSize / originalSize)) * 100;
+
+              status.innerText += `✅ Compressed "${file.name}"\n` +
+                                  `   Original Size: ${originalSize} bytes\n` +
+                                  `   Compressed Size: ${compressedSize} bytes\n` +
+                                  `   Compression: ${compressionRatio.toFixed(2)}%\n\n`;
             } else {
-              console.error("compressHuffman function not found.");
-              status.innerText += `❌ Error: Compression function not loaded for "${file.name}"\n`;
+              throw new Error("Compression function (compressHuffman) not found.");
             }
-          };
-          reader.onerror = () => {
-            status.innerText += `❌ Error reading file: "${file.name}"\n`;
-            showMessageBox("File Read Error", `Could not read file: "${file.name}".`);
-          };
-          reader.readAsArrayBuffer(file);
+          }
+        } catch (error) {
+          status.innerText += `❌ Error processing "${file.name}": ${error.message}\n\n`;
+          showMessageBox("Processing Error", `Failed to process "${file.name}": ${error.message}`);
+        } finally {
+          filesProcessedCount++;
+          if (filesProcessedCount === totalFilesToProcess) {
+            loader.style.display = 'none'; // Hide loader once all files are processed
+          }
         }
-      });
+      }
     });
+
+    // Helper function to read file as ArrayBuffer asynchronously
+    function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+      });
+    }
 
     function resetUI() {
       document.getElementById('fileInput').value = '';
       document.getElementById('decompressInput').value = '';
       status.innerText = 'Status:\n';
       dropZone.classList.remove('drag-over'); // Ensure drag-over class is removed
+      loader.style.display = 'none'; // Ensure loader is hidden
     }
-
-    // Override the alert function in compressor.js and decompressor.js if they use plain alert
-    // It's better to modify the original JS files if possible, but this is a fallback.
-    // However, it's safer to just modify the functions that call alert.
-    // The current approach (wrapping in `compressFilesWrapper`, `decompressFileWrapper`) is better.
-    // Let's ensure the original JS files themselves don't directly call `alert()`.
-    // I'll assume they were modified or the wrappers handle it.
   </script>
 </body>
 </html>
